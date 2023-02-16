@@ -1,8 +1,10 @@
+require('dotenv').config()
 const express = require('express');
 const bodyParser = require('body-parser');
 const mongoose = require('mongoose');
-const encrypt = require('mongoose-encryption');
+const bcrypt = require('bcrypt');
 
+const saltRounds = 10;
 const app = express()
 const port = 3000
 
@@ -17,9 +19,6 @@ const userSchema = new mongoose.Schema({
     email: String,
     password: String
 });
-
-const secret = "Thisismylittlesecret";
-userSchema.plugin(encrypt, {secret: secret, encryptedFields: ['password']});
 
 const User = new mongoose.model('User', userSchema);
 
@@ -37,11 +36,15 @@ app.route('/login')
 
     User.findOne({email: userName}, function(err, foundUser) {
         if(!err) {
-            if(foundUser.password === password) {
-                res.render('secrets');
+            if(foundUser) {
+                bcrypt.compare(password, foundUser.password, function(err, result) {
+                    if(result == true){
+                        res.render('secrets');
+                    }
+                });
             }
             else {
-                res.send('Incorrect password!');
+                res.send('User not found!');
             } 
         }
         else {
@@ -55,19 +58,21 @@ app.route('/register')
     res.render('register');
 })
 .post((req, res) => {
-    const newUser = new User({
-        email:req.body.username,
-        password: req.body.password
+    bcrypt.hash(req.body.password, saltRounds, function(err, hash) {
+        const newUser = new User({
+            email:req.body.username,
+            password: hash
+        });
+    
+        newUser.save(function(err){
+            if(!err) {
+                res.render('secrets');
+            }
+            else {
+                res.send(err);
+            }
+        })
     });
-
-    newUser.save(function(err){
-        if(!err) {
-            res.render('secrets');
-        }
-        else {
-            res.send(err);
-        }
-    })
 });
 
 app.listen(port, () => {
